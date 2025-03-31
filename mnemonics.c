@@ -101,8 +101,8 @@ void print_header() {
  * @brief Displays detailed usage instructions
  */
 void print_help() {
-    printf("=== Dynamic Input Processor ===\n\n");
-    printf("This program demonstrates dynamic input handling with secure entropy generation.\n\n");
+    printf("=== Implementation of BIP-39 in c programming language. ===\n\n");
+    printf("This program receives two inputs to generate mnemonics with secure entropy generation.\n\n");
     printf("HOW TO USE:\n");
     printf("1. Command line mode: ./program <number> <file_index>\n");
     printf("   - <number> must be between 128-256 and a multiple of 32\n");
@@ -231,6 +231,17 @@ int process_interactive_mode(int *num_out, char **filename_out) {
     return 1;
 }
 
+/**
+ * @brief Program entry point
+ * @param argc Argument count
+ * @param argv Argument vector
+ * @return EXIT_SUCCESS (0) or EXIT_FAILURE (1)
+ * @note Flow:
+ *       1. Prints header
+ *       2. Shows help if no args
+ *       3. Processes input (CLI or interactive)
+ *       4. Generates and displays entropy
+ */
 int main(int argc, char *argv[]) {
     print_header();
 
