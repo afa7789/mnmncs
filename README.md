@@ -13,25 +13,30 @@
 </pre>
 
 # Mnemonics
-Implementation of BIP-39 in c programming language.
-In this binary // code we receive the number of bits as expecte by the BIP, between 128 to 256 and will create the mnemonics words and the private key plus public key
+Implementation of BIP-39 in the C Programming Language.
+In this binary (or code), we receive the number of bits as expected by the BIP-39 standard, which ranges from 128 to 256 bits. Using this, we will generate the mnemonic words, as well as the private key and public key.
 
-## What we are doing in it:
--> Generate entropy (random bits of size N), it can have from 128 to 256 (the more bits the better), but the number of bits must be a multiple of 32. (128, 192, 256, etc...)
--> Take the size (number of bits) of this entropy and divide it by 32, the result N, determines the number of BITS that will be used in the hash with the SHA256 method of the entropy that was previously generated, and this determines the CS (checksum)
--> We then do the concatenation of entropy + checksum.
-concatenation = INITIAL ENTROPY + CHECKSUM
--> this concatenation will be separated into groups of 11 bits.
--> for each group of 11 bits we will take a word from a Wordlist (already predefined), the value converted from bits to hex//decimal is the index of this wordlist. -> Add each of these words to a string and display them on the screen :)
--> Using the mnemonic (the words), perform the "PBKDF2" operation
--> Salt: The "mnemonic" string + optionally a passphrase.
--> Output: 512 bits (64 bytes).
--> This seed can be later used to generate deterministic wallets using BIP-0032 or similar methods.
+## What We Are Doing
 
-Basic prerequisites for doing the above:
--> generate entropy (Secure Random Number Generation)
--> Be able to SHA256 something.
--> concatenate BITS
+- **Generate entropy**: Create a sequence of random bits of size `N`, ranging from 128 to 256 bits (more bits provide better security). The number of bits must be a multiple of 32 (e.g., 128, 192, 256, etc.).
+- **Determine the checksum (CS)**:
+  - Divide the size of the entropy (in bits) by 32. The result, `N`, determines the number of bits to be used for the hash.
+  - Compute the checksum (CS) by applying the SHA256 method to the previously generated entropy.
+- **Concatenate entropy and checksum**:
+  - Perform the concatenation: `INITIAL ENTROPY + CHECKSUM`.
+- **Split into groups**:
+  - Divide the concatenated result into groups of 11 bits each.
+- **Map bits to words**:
+  - For each group of 11 bits, convert the bits to a decimal (or hexadecimal) value.
+  - Use this value as an index to select a word from a predefined wordlist.
+- **Create the mnemonic**:
+  - Combine the selected words into a single string and display the resulting mnemonic on the screen.
+- **Perform the PBKDF2 operation**:
+  - Use the mnemonic (the string of words) as input for the PBKDF2 operation.
+  - **Salt**: Combine the mnemonic string with an optional passphrase.
+  - **Output**: Generate 512 bits (64 bytes).
+- **Generate deterministic wallets**:
+  - Use the resulting seed to generate deterministic wallets using BIP-0032 or similar methods.
 
 ## Building:
 
