@@ -25,7 +25,7 @@
 // Function prototypes
 void print_header();
 void print_help();
-void print_entropy(unsigned char *buffer);
+void print_entropy(unsigned char *buffer,size_t length);
 
 void generate_entropy(unsigned char *buffer, size_t length);
 void entropy_checksum_and_concat(unsigned char *buffer);
@@ -91,10 +91,10 @@ void generate_entropy(unsigned char *buffer, size_t length) {
 /**
  * @brief Prints the characters in the entropy mainly for  
  */
-void print_entropy(unsigned char *buffer){
+void print_entropy(unsigned char *buffer, size_t length) {
     // Print entropy in hex (same on all platforms)
     printf("Entropy (hex): ");
-    for (size_t i = 0; i < sizeof(buffer); i++) {
+    for (size_t i = 0; i < length; i++) {
         printf("%02x", buffer[i]);
     }
     printf("\n");
@@ -154,6 +154,15 @@ void print_help() {
     printf("   - Select a file by entering its number\n\n");
     printf("Note: The program will generate cryptographically secure entropy\n");
     printf("      and display it in hexadecimal format before exiting.\n\n");
+}
+
+/**
+ * @brief Prints right-aligned exit message with ASCII art
+ */
+void print_ending() {
+    printf("\n");
+    printf("%80s", "♠♡♦♧ - don't trust, verify\n");  // Right-aligned in 80-char width
+    printf("\n");
 }
 
 // ============ INFO INPUT ============
@@ -298,8 +307,10 @@ int main(int argc, char *argv[]) {
     //  entropy part
     unsigned char entropy[num]; // 256 bits (for 24-word mnemonic)
     generate_entropy(entropy, sizeof(entropy));
-    //print_entropy(entropy);
+    print_entropy(entropy,num);
+    entropy_checksum_and_concat(entropy);
 
+    print_ending();
     return 0;
 }
 
