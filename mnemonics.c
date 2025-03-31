@@ -1,7 +1,15 @@
+/**
+ * @file mnemonics.c
+ * @brief :) 
+ * @details Provides a implementation of BIP-39.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+
+#include "sha256/sha256.h"  // Include your header
+
 // Platform-specific headers and functions
 #ifdef _WIN32
     #include <windows.h>
@@ -17,8 +25,10 @@
 // Function prototypes
 void print_header();
 void print_help();
+void print_entropy(unsigned char *buffer);
 
 void generate_entropy(unsigned char *buffer, size_t length);
+void entropy_checksum_and_concat(unsigned char *buffer);
 
 int is_valid_number(int num);
 int receive_input(int argc, char *argv[], int *num_out, char **filename_out);
@@ -76,6 +86,37 @@ void generate_entropy(unsigned char *buffer, size_t length) {
         }
         fclose(f);
     #endif
+}
+
+/**
+ * @brief Prints the characters in the entropy mainly for  
+ */
+void print_entropy(unsigned char *buffer){
+    // Print entropy in hex (same on all platforms)
+    printf("Entropy (hex): ");
+    for (size_t i = 0; i < sizeof(buffer); i++) {
+        printf("%02x", buffer[i]);
+    }
+    printf("\n");
+}
+
+/** 
+ * @brief Create the checksum for it and concat at the ending of the entropy 
+ */
+void entropy_checksum_and_concat(unsigned char *buffer){
+    const char *message = "Hello, SHA-256!";
+    uint8_t hash[32];  // Buffer for the hash (32 bytes)
+
+    // Compute SHA-256
+    sha256((const uint8_t *)message, strlen(message), hash);
+
+    // Print the hash
+    printf("SHA-256 hash: ");
+    for (int i = 0; i < 32; i++) {
+        printf("%02x", hash[i]);  // Print as hexadecimal
+    }
+    printf("\n");
+    return;
 }
 
 // ============ PRINTERS ============
@@ -255,15 +296,9 @@ int main(int argc, char *argv[]) {
     int result = receive_input(argc, argv, &num, &filename);
 
     //  entropy part
-    unsigned char entropy[32]; // 256 bits (for 24-word mnemonic)
+    unsigned char entropy[num]; // 256 bits (for 24-word mnemonic)
     generate_entropy(entropy, sizeof(entropy));
-
-    // Print entropy in hex (same on all platforms)
-    printf("Entropy (hex): ");
-    for (size_t i = 0; i < sizeof(entropy); i++) {
-        printf("%02x", entropy[i]);
-    }
-    printf("\n");
+    //print_entropy(entropy);
 
     return 0;
 }
