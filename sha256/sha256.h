@@ -23,6 +23,14 @@ extern "C" {
  */
 void sha256(const uint8_t *data, size_t len, uint8_t hash[32]);
 
+#define SHA512_BLOCK_SIZE 128
+#define SHA512_DIGEST_SIZE 64
+
+void sha512(const uint8_t *data, size_t len, uint8_t digest[SHA512_DIGEST_SIZE]);
+void hmac_sha512(const uint8_t *key, size_t keylen, 
+                const uint8_t *data, size_t datalen, 
+                uint8_t digest[SHA512_DIGEST_SIZE]);
+
 #ifdef __cplusplus
 }
 #endif
