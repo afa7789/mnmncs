@@ -357,7 +357,7 @@ static int print_xprv_and_wif(const byte *private_key, const byte *chain_code) {
  */
 void print_ending() {
     printf("\n");
-    printf("%80s", "₿☀🦄ᚠ - you can just build things\n");
+    printf("%80s", "₿Ω∆† - you can just build things\n");
     printf("\n");
 }
 

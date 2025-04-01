@@ -147,5 +147,5 @@ bitcoin-cli importdescriptors '[{
 # There is probably a more up-to-date improved way of importing descriptors.
 # But we are using `active: false` here to be able to import single key into wallet.
 
-                                      ₿☀🦄ᚠ - you can just build things
+                                        ₿Ω∆† - you can just build things
 ```
