@@ -338,6 +338,7 @@ void print_mnemonics(const char **words, size_t num_words,
             }
         }
     }
+    printf("\n");
 }
 
 /**
@@ -412,6 +413,19 @@ void print_help() {
 void print_ending() {
     printf("\n");
     printf("%80s", "♠♡♦♧ - don't trust, verify\n");
+    printf("\n");
+}
+
+/**
+ * @brief Prints the seed in hexadecimal format
+ * @param seed The seed to print
+ */
+void print_seed(uint8_t *seed) {
+    // Print the resulting seed in hex
+    printf("BIP-39 Seed (hex): ");
+    for (int i = 0; i < 64; i++) {
+        printf("%02x", seed[i]);
+    }
     printf("\n");
 }
 
@@ -650,6 +664,16 @@ int main(int argc, char *argv[]) {
     char **words = generate_mnemonics(entropy, num, filename, &num_words);
     printf("\nmnemonics words %zu:\n", num_words);
     print_mnemonics((const char **)words, num_words, 4);
+
+    // Optional passphrase (can be empty string "")
+    const char *passphrase = "TREZOR";
+    // Output buffer (64 bytes/512 bits)
+    uint8_t seed[64];
+    // Derive the seed
+    derive_seed_from_mnemonic(words, num_words, passphrase, seed);
+    print_seed(seed);
+
+    // Ending
     free_words(words, num_words);
     print_ending();
     return 0;
