@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#include <stdint.h>
+#include <assert.h>
 
 #include "sha256/sha256.h"  // Include your header
 
@@ -20,16 +22,26 @@
     #include <errno.h>       // For errno
 #endif
 
+
+#define MNEMONIC_MAX_LENGTH 16  ///< Maximum expected length of a mnemonic line.
 #define MAX_FILES 100  // Maximum files in the folder
 
 // Function prototypes
 void print_header();
 void print_help();
 void print_entropy(unsigned char *buffer,size_t length);
+void print_hash(unsigned char *buffer);
+void print_ending();
+void print_mnemonics(const char **words, size_t num_words, size_t words_per_line);
 
 void generate_entropy(unsigned char *buffer, size_t length);
 void entropy_checksum_and_concat(unsigned char **buffer,size_t *length);
 void concat_arrays(unsigned char **dest, size_t *dest_size, unsigned char *src, size_t src_size);
+
+void free_words(char **words, size_t count);
+char **read_mnemonics(const char *filename, size_t *num_lines);
+size_t entropy_to_index(const unsigned char *chunk, size_t mnemonics_count);
+char **generate_mnemonics(const unsigned char *entropy, size_t num_bytes, const char *filename, size_t *num_words);
 
 int is_valid_number(int num);
 int receive_input(int argc, char *argv[], int *num_out, char **filename_out);
@@ -155,6 +167,169 @@ void entropy_checksum_and_concat(unsigned char **buffer, size_t *length) {
     size_t checksum_bits = *length / 32;  // e.g., 256 / 32 = 8 bits = 1 byte
     concat_arrays(buffer, length, hash, checksum_bits);  // Pass double pointer
     print_entropy(*buffer, *length);
+}
+
+// ============ MNEMONICS =========== 
+
+/**
+ * @brief Reads a file into an array of strings (one per line).
+ * @param filename The name of the file to read.
+ * @param num_lines Output parameter to store the number of lines read.
+ * @return A dynamically allocated array of strings (must be freed by the caller), or NULL on failure.
+ */
+char **read_mnemonics(const char *filename, size_t *num_lines) {
+    if (!filename || !num_lines) return NULL;
+
+    FILE *file = fopen(filename, "r");
+    if (!file) return NULL;
+
+    // Count lines first to allocate exact memory needed.
+    size_t count = 0;
+    char ch;
+    while ((ch = fgetc(file)) != EOF) {
+        if (ch == '\n') count++;
+    }
+    rewind(file);
+
+    char **lines = malloc(count * sizeof(char *));
+    if (!lines) {
+        fclose(file);
+        return NULL;
+    }
+
+    char buffer[MNEMONIC_MAX_LENGTH];
+    size_t i = 0;
+    while (fgets(buffer, sizeof(buffer), file)) {
+        buffer[strcspn(buffer, "\n")] = '\0';  // Remove newline.
+        lines[i] = strdup(buffer);
+        if (!lines[i]) {
+            // Cleanup on failure.
+            for (size_t j = 0; j < i; j++) free(lines[j]);
+            free(lines);
+            fclose(file);
+            return NULL;
+        }
+        i++;
+    }
+    fclose(file);
+
+    *num_lines = count;
+    return lines;
+}
+
+/**
+ * @brief Converts 11 bytes of entropy into an index within `mnemonics` range.
+ * @param chunk Pointer to 11 bytes of entropy data.
+ * @param mnemonics_count Total number of available mnemonics.
+ * @return A valid index in the range [0, mnemonics_count - 1].
+ */
+size_t entropy_to_index(const unsigned char *chunk, size_t mnemonics_count) {
+    assert(chunk && mnemonics_count > 0);
+
+    // Treat the 11 bytes as a big-endian integer and mod by mnemonics_count.
+    uint64_t value = 0;
+    for (int i = 0; i < 11; i++) {
+        value = (value << 8) | chunk[i];
+    }
+    return value % mnemonics_count;
+}
+
+/**
+ * @brief Generates a mnemonic phrase from entropy data.
+ * @param entropy The entropy array (must be at least `11 * num_words` bytes long).
+ * @param num_bytes Total size of the entropy array in bytes.
+ * @param filename The file containing mnemonics (one per line).
+ * @param num_words Output parameter to store the number of words generated.
+ * @return A dynamically allocated array of selected mnemonics (must be freed by the caller), or NULL on failure.
+ */
+char **generate_mnemonics(
+    const unsigned char *entropy,
+    size_t num_bytes,
+    const char *filename,
+    size_t *num_words
+) {
+    if (!entropy || !filename || !num_words || num_bytes % 11 != 0) {
+        return NULL;
+    }
+
+    size_t mnemonics_count = 0;
+    char **mnemonics = read_mnemonics(filename, &mnemonics_count);
+    if (!mnemonics || mnemonics_count == 0) {
+        printf("Error: Failed to read mnemonics from file: %s.\n", filename);
+        return NULL;
+    }
+
+    *num_words = num_bytes / 11;
+    char **selected_words = malloc(*num_words * sizeof(char *));
+    if (!selected_words) {
+        for (size_t i = 0; i < mnemonics_count; i++) free(mnemonics[i]);
+        free(mnemonics);
+        return NULL;
+    }
+
+    for (size_t i = 0; i < *num_words; i++) {
+        const unsigned char *chunk = entropy + (i * 11);
+        size_t index = entropy_to_index(chunk, mnemonics_count);
+        selected_words[i] = strdup(mnemonics[index]);
+        if (!selected_words[i]) {
+            // Cleanup on failure.
+            for (size_t j = 0; j < i; j++) free(selected_words[j]);
+            free(selected_words);
+            for (size_t j = 0; j < mnemonics_count; j++) free(mnemonics[j]);
+            free(mnemonics);
+            return NULL;
+        }
+    }
+
+    // Free the mnemonics array (no longer needed).
+    for (size_t i = 0; i < mnemonics_count; i++) free(mnemonics[i]);
+    free(mnemonics);
+
+    return selected_words;
+}
+
+/**
+ * @brief Frees an array of strings.
+ * @param words The array to free.
+ * @param count Number of strings in the array.
+ */
+void free_words(char **words, size_t count) {
+    if (!words) return;
+    for (size_t i = 0; i < count; i++) free(words[i]);
+    free(words);
+}
+
+/**
+ * @brief Prints an array of mnemonic words in a formatted way.
+ * @param words Array of strings (mnemonics) to print.
+ * @param num_words Number of words in the array.
+ * @param words_per_line Number of words to print per line (default: 6).
+ */
+void print_mnemonics(const char **words, size_t num_words, size_t words_per_line) {
+    if (!words || num_words == 0) {
+        fprintf(stderr, "Error: No mnemonics to print.\n");
+        return;
+    }
+
+    if (words_per_line == 0) {
+        words_per_line = 6; // Default to 6 words per line
+    }
+
+    for (size_t i = 0; i < num_words; i++) {
+        if (words[i]) {
+            printf("%s", words[i]);
+            
+            // Add space if not the last word in the line or array
+            if ((i + 1) % words_per_line != 0 && i != num_words - 1) {
+                printf(" ");
+            }
+            
+            // Newline after `words_per_line` words
+            if ((i + 1) % words_per_line == 0 || i == num_words - 1) {
+                printf("\n");
+            }
+        }
+    }
 }
 
 // ============ PRINTERS ============
@@ -349,7 +524,12 @@ int main(int argc, char *argv[]) {
     print_entropy(entropy,num);
     entropy_checksum_and_concat(&entropy, &num);
     // print_entropy(entropy,num); // Print the buffer with the hash
-
+    // size_t num_bytes = sizeof(entropy);
+    size_t num_words = 0;
+    char **words = generate_mnemonics(entropy, num, filename, &num_words);
+    printf("\nnum_words %d\n",num_words);
+    print_mnemonics((const char **)words, num_words, 4);
+    free_words(words, num_words);
     print_ending();
     return 0;
 }
