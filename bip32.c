@@ -306,10 +306,13 @@ static int print_xprv_and_wif(const byte *private_key, const byte *chain_code) {
         return result;
     }
 
-    printf("Electrum using xpriv\n\n");
+    printf("\n=== Electrum Wallet (HD) ===\n");
     printf("xprv: %s\n\n", xprv); 
-    printf("To create a spending wallet, please enter a master private key (xprv/yprv/zprv).\n");
-    printf("NewWallet -> standardWallet -> use a masterKey -> PASTER the Xpriv above.\n");
+    printf("To create a full HD wallet in Electrum:\n");
+    printf("1. New Wallet -> Standard Wallet\n");
+    printf("2. 'Use a master key' -> Paste this xprv\n");
+    printf("3. Choose BIP44 (legacy) or BIP84 (SegWit) derivation\n");
+    printf("4. Complete setup (set password if desired)\n\n");
 
     /* Generate WIF */
     result = private_key_to_wif(private_key, wif_key);
@@ -318,14 +321,37 @@ static int print_xprv_and_wif(const byte *private_key, const byte *chain_code) {
         return result;
     }
 
-    printf("Electrum using WIF\n\n");
+    printf("\n=== Electrum (Single-Key Wallet) ===\n");
     printf("WIF: %s\n\n", wif_key);
-    printf("The WIF is a Single-Key Wallet. \"Enter a list of Bitcoin addresses (this will create a watching-only wallet), or a list of private keys.\"\n");
-    printf("New Wallet -> Import Bitcoin addresses or private keys -> paste it and click next -> setup password, done.\n");
+    printf("To import as a single-address wallet in Electrum:\n");
+    printf("1. New Wallet -> Standard Wallet\n");
+    printf("2. 'Import Bitcoin private keys' -> Paste this WIF\n");
+    printf("3. Complete setup (set password if desired)\n\n");
+
+    printf("\n=== Bitcoin Core Options ===\n");
+    printf("Option 1: Legacy Wallet Import\n");
+    printf("--------------------------------\n");
+    printf("# First create a legacy wallet if needed:\n");
+    printf("bitcoin-cli createwallet \"legacy_wallet\" false true\n\n");
+    printf("# Import the WIF key:\n");
+    printf("bitcoin-cli -rpcwallet=\"legacy_wallet\" importprivkey \"%s\" \"my_label\" false\n\n", wif_key);
+    
+    printf("Option 2: Descriptor Wallet Import\n");
+    printf("----------------------------------\n");
+    printf("# First get the descriptor checksum:\n");
+    printf("bitcoin-cli getdescriptorinfo \"pkh(%s)\"\n\n", wif_key);
+    printf("# Then import using the descriptor (replace #checksum):\n");
+    printf("bitcoin-cli importdescriptors '[{\n");
+    printf("  \"desc\": \"pkh(%s)#checksum\",\n", wif_key);
+    printf("  \"timestamp\": \"now\",\n");
+    printf("  \"label\": \"my_label\",\n");
+    printf("  \"active\": false\n");
+    printf("}]'\n");
+    printf("# There is probably a more up-to-date improved way of importing descriptors.\n");
+    printf("# But we are using `active: false` here to be able to import single key into wallet.");
 
     return SUCCESS;
 }
-
 /**
  * @brief Prints right-aligned exit message with ASCII art
  */
@@ -334,7 +360,6 @@ void print_ending() {
     printf("%80s", "₿☀🦄ᚠ - you can just build things\n");
     printf("\n");
 }
-
 
 /**
  * @brief Processes a BIP-39 seed in hex format and derives/displays BIP-32 master key
