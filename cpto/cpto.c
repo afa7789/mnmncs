@@ -1,10 +1,9 @@
 /**
- * @file sha256.c
- * @brief SHA-256 implementation.
- * @details This is a portable implementation of the SHA-256 algorithm.
+ * @file cpto.c
+ * @brief SHA-256, SHA-512, and other cryptography implementations.
+ * @details This is a portable implementation of cryptography algorithms.
  */
-
-#include "sha256.h"
+#include "cpto.h"
 #include <string.h>  // For memcpy, memset
 
 // SHA-256 constants (first 32 bits of fractional parts of cube roots of first 64 primes)
@@ -364,6 +363,14 @@ void sha512(const uint8_t *data, size_t len, uint8_t digest[SHA512_DIGEST_SIZE])
     }
 }
 
+/**
+ * @brief HMAC-SHA512 implementation.
+ * @param key The key to use for HMAC.
+ * @param keylen Length of the key.
+ * @param data The data to hash.
+ * @param datalen Length of the data.
+ * @param digest The output buffer for the HMAC digest.
+ */
 void hmac_sha512(const uint8_t *key, size_t keylen,
                 const uint8_t *data, size_t datalen,
                 uint8_t digest[SHA512_DIGEST_SIZE]){
@@ -396,4 +403,60 @@ void hmac_sha512(const uint8_t *key, size_t keylen,
     memcpy(outer_data, o_key_pad, SHA512_BLOCK_SIZE);
     memcpy(outer_data + SHA512_BLOCK_SIZE, inner_hash, SHA512_DIGEST_SIZE);
     sha512(outer_data, SHA512_BLOCK_SIZE + SHA512_DIGEST_SIZE, digest);
+}
+
+/**
+ * @brief PBKDF2-HMAC-SHA512 implementation.
+ * @param password The password to derive the key from.
+ * @param password_len Length of the password.
+ * @param salt The salt to use.
+ * @param salt_len Length of the salt.
+ * @param iterations Number of iterations.
+ * @param output The output buffer for the derived key.
+ * @param output_len Length of the derived key.
+ */
+void pbkdf2_hmac_sha512(
+    const uint8_t *password, size_t password_len,
+    const uint8_t *salt, size_t salt_len,
+    uint32_t iterations,
+    uint8_t *output, size_t output_len) {
+
+    uint8_t counter[4] = {0, 0, 0, 1};
+    uint8_t U[SHA512_DIGEST_SIZE];
+    uint8_t T[SHA512_DIGEST_SIZE];
+    uint8_t salt_plus_counter[salt_len + 4];
+    
+    memcpy(salt_plus_counter, salt, salt_len);
+    
+    while (output_len > 0) {
+        // Prepare salt || counter
+        memcpy(salt_plus_counter + salt_len, counter, 4);
+        
+        // First iteration
+        hmac_sha512(password, password_len, 
+                   salt_plus_counter, salt_len + 4, 
+                   U);
+        memcpy(T, U, SHA512_DIGEST_SIZE);
+        
+        // Subsequent iterations
+        for (uint32_t i = 1; i < iterations; i++) {
+            hmac_sha512(password, password_len, 
+                       U, SHA512_DIGEST_SIZE, 
+                       U);
+            for (size_t j = 0; j < SHA512_DIGEST_SIZE; j++) {
+                T[j] ^= U[j];
+            }
+        }
+        
+        // Copy to output
+        size_t to_copy = output_len < SHA512_DIGEST_SIZE ? output_len : SHA512_DIGEST_SIZE;
+        memcpy(output, T, to_copy);
+        output += to_copy;
+        output_len -= to_copy;
+        
+        // Increment counter
+        for (int i = 3; i >= 0; i--) {
+            if (++counter[i] != 0) break;
+        }
+    }
 }

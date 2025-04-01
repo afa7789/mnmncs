@@ -1,59 +1,61 @@
 /**
  * @file mnemonics.c
- * @brief :) 
+ * @brief :)
  * @details Provides a implementation of BIP-39.
  */
+#include <assert.h>
+#include <ctype.h>
+#include <dirent.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dirent.h>
-#include <stdint.h>
-#include <assert.h>
-#include <ctype.h>
-#include <stdbool.h>
 
-#include "sha256/sha256.h"  // Include your header
+#include "cpto/cpto.h"  // Include your header
 
 // Platform-specific headers and functions
 #ifdef _WIN32
-    #include <windows.h>
-    #include <bcrypt.h>
+#include <bcrypt.h>
+#include <windows.h>
 #else
-    #include <unistd.h>
-    #include <sys/random.h>  // For getrandom()
-    #include <errno.h>       // For errno
+#include <errno.h>       // For errno
+#include <sys/random.h>  // For getrandom()
+#include <unistd.h>
 #endif
 
-
 #define MNEMONIC_MAX_LENGTH 16  ///< Maximum expected length of a mnemonic line.
-#define MAX_FILES 100  // Maximum files in the folder
-#define PATH_MAX 4096  // Maximum path length
+#define MAX_FILES 100           // Maximum files in the folder
+#define PATH_MAX 4096           // Maximum path length
 
 // Function prototypes
 void print_header();
 void print_help();
-void print_entropy(unsigned char *buffer,size_t length);
+void print_entropy(unsigned char *buffer, size_t length);
 void print_hash(unsigned char *buffer);
 void print_ending();
-void print_mnemonics(const char **words, size_t num_words, size_t words_per_line);
+void print_mnemonics(const char **words, size_t num_words,
+                     size_t words_per_line);
 void print_files_list(char *files[], int count);
 
 void generate_entropy(unsigned char *buffer, size_t length);
-void entropy_checksum_and_concat(unsigned char **buffer,size_t *length);
-void concat_arrays(unsigned char **dest, size_t *dest_size, unsigned char *src, size_t src_size);
+void entropy_checksum_and_concat(unsigned char **buffer, size_t *length);
+void concat_arrays(unsigned char **dest, size_t *dest_size, unsigned char *src,
+                   size_t src_size);
 
 void free_words(char **words, size_t count);
 char **read_mnemonics(const char *filename, size_t *num_lines);
 size_t entropy_to_index(const unsigned char *chunk, size_t mnemonics_count);
-char **generate_mnemonics(const unsigned char *entropy, size_t num_bytes, const char *filename, size_t *num_words);
+char **generate_mnemonics(const unsigned char *entropy, size_t num_bytes,
+                          const char *filename, size_t *num_words);
 
 int is_valid_number(int num);
-int receive_input(int argc, char *argv[], int *num_out, char **filename_out);
-int process_command_line(int argc, char *argv[], int *num_out, int *file_index_out, 
-    char *files[], int file_count);
+int receive_input(int argc, char *argv[], size_t *num_out, char **filename_out);
+int process_command_line(int argc, char *argv[], size_t *num_out,
+                         int *file_index_out, char *files[], int file_count);
 int get_wordlist_files(char *files[], int max_files);
-int process_interactive_mode(int *num_out, int *file_index_out, 
-        char *files[], int file_count);
+int process_interactive_mode(size_t *num_out, int *file_index_out,
+                             char *files[], int file_count);
 int get_wordlist_files(char *files[], int max_files);
 void cleanup_files_list(char *files[], int count);
 
@@ -70,48 +72,44 @@ void cleanup_files_list(char *files[], int count);
  * @warning Exits program on failure
  */
 void generate_entropy(unsigned char *buffer, size_t length) {
-    #ifdef _WIN32
-        // Windows implementation
-        NTSTATUS status = BCryptGenRandom(
-            NULL,
-            buffer,
-            length,
-            BCRYPT_USE_SYSTEM_PREFERRED_RNG
-        );
-        if (status != 0) {
-            fprintf(stderr, "BCryptGenRandom failed: 0x%x\n", status);
-            exit(EXIT_FAILURE);
-        }
-    #else
-        // Linux/macOS implementation
-        #if defined(__linux__) && defined(SYS_getrandom)
-            // Try getrandom() first (Linux-specific)
-            ssize_t result = getrandom(buffer, length, 0);
-            if (result == (ssize_t)length) return;
-            if (result == -1 && errno != ENOSYS) {
-                perror("getrandom failed");
-                exit(EXIT_FAILURE);
-            }
-            // Fall through to /dev/urandom if getrandom isn't available
-        #endif
-        
-        // Universal Unix fallback
-        FILE *f = fopen("/dev/urandom", "rb");
-        if (f == NULL) {
-            perror("Failed to open /dev/urandom");
-            exit(EXIT_FAILURE);
-        }
-        if (fread(buffer, 1, length, f) != length) {
-            perror("Failed to read from /dev/urandom");
-            fclose(f);
-            exit(EXIT_FAILURE);
-        }
+#ifdef _WIN32
+    // Windows implementation
+    NTSTATUS status =
+        BCryptGenRandom(NULL, buffer, length, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    if (status != 0) {
+        fprintf(stderr, "BCryptGenRandom failed: 0x%x\n", status);
+        exit(EXIT_FAILURE);
+    }
+#else
+// Linux/macOS implementation
+#if defined(__linux__) && defined(SYS_getrandom)
+    // Try getrandom() first (Linux-specific)
+    ssize_t result = getrandom(buffer, length, 0);
+    if (result == (ssize_t)length) return;
+    if (result == -1 && errno != ENOSYS) {
+        perror("getrandom failed");
+        exit(EXIT_FAILURE);
+    }
+    // Fall through to /dev/urandom if getrandom isn't available
+#endif
+
+    // Universal Unix fallback
+    FILE *f = fopen("/dev/urandom", "rb");
+    if (f == NULL) {
+        perror("Failed to open /dev/urandom");
+        exit(EXIT_FAILURE);
+    }
+    if (fread(buffer, 1, length, f) != length) {
+        perror("Failed to read from /dev/urandom");
         fclose(f);
-    #endif
+        exit(EXIT_FAILURE);
+    }
+    fclose(f);
+#endif
 }
 
 /**
- * @brief Prints the characters in the entropy mainly for  
+ * @brief Prints the characters in the entropy mainly for
  * @param buffer Output buffer to store entropy
  * @param length Number of the buffer size to be able to print
  */
@@ -125,7 +123,7 @@ void print_entropy(unsigned char *buffer, size_t length) {
 }
 
 /**
- * @brief Prints the characters in the hash mainly for 
+ * @brief Prints the characters in the hash mainly for
  * @param buffer Output buffer to store hash
  */
 void print_hash(unsigned char *buffer) {
@@ -138,24 +136,26 @@ void print_hash(unsigned char *buffer) {
 }
 
 /**
- * @brief Concatenate two array of bytes and also increase the parameter related to the length of original array.
+ * @brief Concatenate two array of bytes and also increase the parameter related
+ * to the length of original array.
  * @param dest Initial array of the concat
  * @param dest_size Size of the array dest
  * @param src Src array, we want to concat
  * @param src_size Size of the src array
  */
- void concat_arrays(unsigned char **dest, size_t *dest_size, unsigned char *src, size_t src_size) {
-    *dest = realloc(*dest, *dest_size + src_size); // Resize the array
+void concat_arrays(unsigned char **dest, size_t *dest_size, unsigned char *src,
+                   size_t src_size) {
+    *dest = realloc(*dest, *dest_size + src_size);  // Resize the array
     if (*dest == NULL) {
         perror("realloc failed");
         exit(1);
     }
-    memcpy(*dest + *dest_size, src, src_size); // Copy the source data
-    *dest_size += src_size; // Update the size
+    memcpy(*dest + *dest_size, src, src_size);  // Copy the source data
+    *dest_size += src_size;                     // Update the size
 }
 
-/** 
- * @brief Create the checksum for it and concat at the ending of the entropy 
+/**
+ * @brief Create the checksum for it and concat at the ending of the entropy
  * @param buffer The buffer of the entropy
  * @param length The size of the buffer
  */
@@ -177,13 +177,14 @@ void entropy_checksum_and_concat(unsigned char **buffer, size_t *length) {
     print_entropy(*buffer, *length);
 }
 
-// ============ MNEMONICS =========== 
+// ============ MNEMONICS ===========
 
 /**
  * @brief Reads a file into an array of strings (one per line).
  * @param filename The name of the file to read.
  * @param num_lines Output parameter to store the number of lines read.
- * @return A dynamically allocated array of strings (must be freed by the caller), or NULL on failure.
+ * @return A dynamically allocated array of strings (must be freed by the
+ * caller), or NULL on failure.
  */
 char **read_mnemonics(const char *filename, size_t *num_lines) {
     if (!filename || !num_lines) return NULL;
@@ -244,18 +245,16 @@ size_t entropy_to_index(const unsigned char *chunk, size_t mnemonics_count) {
 
 /**
  * @brief Generates a mnemonic phrase from entropy data.
- * @param entropy The entropy array (must be at least `11 * num_words` bytes long).
+ * @param entropy The entropy array (must be at least `11 * num_words` bytes
+ * long).
  * @param num_bytes Total size of the entropy array in bytes.
  * @param filename The file containing mnemonics (one per line).
  * @param num_words Output parameter to store the number of words generated.
- * @return A dynamically allocated array of selected mnemonics (must be freed by the caller), or NULL on failure.
+ * @return A dynamically allocated array of selected mnemonics (must be freed by
+ * the caller), or NULL on failure.
  */
-char **generate_mnemonics(
-    const unsigned char *entropy,
-    size_t num_bytes,
-    const char *filename,
-    size_t *num_words
-) {
+char **generate_mnemonics(const unsigned char *entropy, size_t num_bytes,
+                          const char *filename, size_t *num_words) {
     if (!entropy || !filename || !num_words || num_bytes % 11 != 0) {
         return NULL;
     }
@@ -313,31 +312,61 @@ void free_words(char **words, size_t count) {
  * @param num_words Number of words in the array.
  * @param words_per_line Number of words to print per line (default: 6).
  */
-void print_mnemonics(const char **words, size_t num_words, size_t words_per_line) {
+void print_mnemonics(const char **words, size_t num_words,
+                     size_t words_per_line) {
     if (!words || num_words == 0) {
         fprintf(stderr, "Error: No mnemonics to print.\n");
         return;
     }
 
     if (words_per_line == 0) {
-        words_per_line = 6; // Default to 6 words per line
+        words_per_line = 6;  // Default to 6 words per line
     }
 
     for (size_t i = 0; i < num_words; i++) {
         if (words[i]) {
             printf("%s", words[i]);
-            
+
             // Add space if not the last word in the line or array
             if ((i + 1) % words_per_line != 0 && i != num_words - 1) {
                 printf(" ");
             }
-            
+
             // Newline after `words_per_line` words
             if ((i + 1) % words_per_line == 0 || i == num_words - 1) {
                 printf("\n");
             }
         }
     }
+}
+
+/**
+ * @brief Derives a seed from a mnemonic phrase using PBKDF2.
+ * @param mnemonic The mnemonic phrase (array of words).
+ * @param word_count Number of words in the mnemonic.
+ * @param passphrase Optional passphrase (can be NULL).
+ * @param seed Output buffer for the derived seed (must be at least 64 bytes).
+ */
+void derive_seed_from_mnemonic(const char **mnemonic, size_t word_count,
+                               const char *passphrase, uint8_t seed[64]) {
+    // 1. Convert mnemonic to string
+    char mnemonic_str[1024] = {0};
+    for (size_t i = 0; i < word_count; i++) {
+        if (i > 0) strcat(mnemonic_str, " ");
+        strcat(mnemonic_str, mnemonic[i]);
+    }
+
+    // 2. Prepare salt ("mnemonic" + passphrase)
+    char salt[1024] = "mnemonic";
+    if (passphrase && *passphrase) {
+        strcat(salt, passphrase);
+    }
+
+    // 3. Run PBKDF2
+    pbkdf2_hmac_sha512((uint8_t *)mnemonic_str, strlen(mnemonic_str),
+                       (uint8_t *)salt, strlen(salt),
+                       2048,  // Standard BIP39 iteration count
+                       seed, 64);
 }
 
 // ============ PRINTERS ============
@@ -382,7 +411,7 @@ void print_help() {
  */
 void print_ending() {
     printf("\n");
-    printf("%80s", "♠♡♦♧ - don't trust, verify\n");  // Right-aligned in 80-char width
+    printf("%80s", "♠♡♦♧ - don't trust, verify\n");
     printf("\n");
 }
 
@@ -404,7 +433,8 @@ int is_valid_number(int num) {
  * @param filename_out Output for selected filename (must be freed by caller)
  * @return 1 on success, 0 if no input processed, -1 on error
  */
- int receive_input(int argc, char *argv[], int *num_out, char **filename_out) {
+int receive_input(int argc, char *argv[], size_t *num_out,
+                  char **filename_out) {
     // Get available files first
     char *files[MAX_FILES];
     int file_count = get_wordlist_files(files, MAX_FILES);
@@ -415,16 +445,18 @@ int is_valid_number(int num) {
 
     int file_index = -1;
     int result;
-    
+
     // Try CLI first
-    if ((result = process_command_line(argc, argv, num_out, &file_index, files, file_count)) != 0) {
+    if ((result = process_command_line(argc, argv, num_out, &file_index, files,
+                                       file_count)) != 0) {
         if (result < 0) {
             cleanup_files_list(files, file_count);
             return -1;
         }
-    } 
+    }
     // Fall back to interactive
-    else if ((result = process_interactive_mode(num_out, &file_index, files, file_count)) <= 0) {
+    else if ((result = process_interactive_mode(num_out, &file_index, files,
+                                                file_count)) <= 0) {
         cleanup_files_list(files, file_count);
         return result;
     }
@@ -466,14 +498,15 @@ void cleanup_files_list(char *files[], int count) {
  * @param file_count Number of available files
  * @return 1 on success, 0 if insufficient args, -1 on error
  */
-int process_command_line(int argc, char *argv[], int *num_out, int *file_index_out, 
-                        char *files[], int file_count) {
+int process_command_line(int argc, char *argv[], size_t *num_out,
+                         int *file_index_out, char *files[], int file_count) {
     if (argc < 3) return 0;
 
     // Validate number
     int num = atoi(argv[1]);
     if (!is_valid_number(num)) {
-        fprintf(stderr, "Invalid number. Must be 128-256 and divisible by 32\n");
+        fprintf(stderr,
+                "Invalid number. Must be 128-256 and divisible by 32\n");
         return -1;
     }
     *num_out = num;
@@ -482,7 +515,8 @@ int process_command_line(int argc, char *argv[], int *num_out, int *file_index_o
     if (isdigit(argv[2][0])) {
         int choice = atoi(argv[2]);
         if (choice < 1 || choice > file_count) {
-            fprintf(stderr, "Invalid selection. Available options (1-%d):\n", file_count);
+            fprintf(stderr, "Invalid selection. Available options (1-%d):\n",
+                    file_count);
             print_files_list(files, file_count);
             return -1;
         }
@@ -516,11 +550,11 @@ int process_command_line(int argc, char *argv[], int *num_out, int *file_index_o
  * @param file_count Number of available files
  * @return 1 on success, -1 on error
  */
-int process_interactive_mode(int *num_out, int *file_index_out, 
-                            char *files[], int file_count) {
+int process_interactive_mode(size_t *num_out, int *file_index_out,
+                             char *files[], int file_count) {
     // Get number
     printf("Enter number (128-256, divisible by 32): ");
-    if (scanf("%d", num_out) != 1 || !is_valid_number(*num_out)) {
+    if (scanf("%zu", num_out) != 1 || !is_valid_number((int)*num_out)) {
         fprintf(stderr, "Invalid number\n");
         return -1;
     }
@@ -548,7 +582,7 @@ int process_interactive_mode(int *num_out, int *file_index_out,
  */
 void print_files_list(char *files[], int count) {
     for (int i = 0; i < count; i++) {
-        printf("%2d: %s\n", i+1, files[i]);
+        printf("%2d: %s\n", i + 1, files[i]);
     }
 }
 
@@ -599,8 +633,8 @@ int main(int argc, char *argv[]) {
     if (argc < 3) {
         print_help();
     }
-    
-    size_t num=0;
+
+    size_t num = 0;
     char *filename = NULL;
     int result = receive_input(argc, argv, &num, &filename);
 
@@ -608,16 +642,15 @@ int main(int argc, char *argv[]) {
     // If you use 256 bits you get a 24-word mnemonic)
     unsigned char *entropy = malloc(num);
     generate_entropy(entropy, num);
-    print_entropy(entropy,num);
+    print_entropy(entropy, num);
     entropy_checksum_and_concat(&entropy, &num);
     // print_entropy(entropy,num); // Print the buffer with the hash
     // size_t num_bytes = sizeof(entropy);
     size_t num_words = 0;
     char **words = generate_mnemonics(entropy, num, filename, &num_words);
-    printf("\nnum_words %d\n",num_words);
+    printf("\nmnemonics words %zu:\n", num_words);
     print_mnemonics((const char **)words, num_words, 4);
     free_words(words, num_words);
     print_ending();
     return 0;
 }
-
