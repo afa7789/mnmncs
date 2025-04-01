@@ -9,6 +9,8 @@
 #include <dirent.h>
 #include <stdint.h>
 #include <assert.h>
+#include <ctype.h>
+#include <stdbool.h>
 
 #include "sha256/sha256.h"  // Include your header
 
@@ -25,6 +27,7 @@
 
 #define MNEMONIC_MAX_LENGTH 16  ///< Maximum expected length of a mnemonic line.
 #define MAX_FILES 100  // Maximum files in the folder
+#define PATH_MAX 4096  // Maximum path length
 
 // Function prototypes
 void print_header();
@@ -33,6 +36,7 @@ void print_entropy(unsigned char *buffer,size_t length);
 void print_hash(unsigned char *buffer);
 void print_ending();
 void print_mnemonics(const char **words, size_t num_words, size_t words_per_line);
+void print_files_list(char *files[], int count);
 
 void generate_entropy(unsigned char *buffer, size_t length);
 void entropy_checksum_and_concat(unsigned char **buffer,size_t *length);
@@ -45,9 +49,13 @@ char **generate_mnemonics(const unsigned char *entropy, size_t num_bytes, const 
 
 int is_valid_number(int num);
 int receive_input(int argc, char *argv[], int *num_out, char **filename_out);
-int process_command_line(int argc, char *argv[], int *num_out, char **filename_out);
-int process_interactive_mode(int *num_out, char **filename_out);
-
+int process_command_line(int argc, char *argv[], int *num_out, int *file_index_out, 
+    char *files[], int file_count);
+int get_wordlist_files(char *files[], int max_files);
+int process_interactive_mode(int *num_out, int *file_index_out, 
+        char *files[], int file_count);
+int get_wordlist_files(char *files[], int max_files);
+void cleanup_files_list(char *files[], int count);
 
 // ============ CRYPTOGRAPHY ============
 
@@ -388,7 +396,6 @@ void print_ending() {
 int is_valid_number(int num) {
     return (num >= 128 && num <= 256 && num % 32 == 0);
 }
-
 /**
  * @brief Unified input processor (CLI or interactive)
  * @param argc Argument count
@@ -397,16 +404,56 @@ int is_valid_number(int num) {
  * @param filename_out Output for selected filename (must be freed by caller)
  * @return 1 on success, 0 if no input processed, -1 on error
  */
-int receive_input(int argc, char *argv[], int *num_out, char **filename_out) {
-    // Try command line first
-    int result = process_command_line(argc, argv, num_out, filename_out);
-    
-    // Fall back to interactive if CLI processing didn't occur
-    if (result == 0) {
-        result = process_interactive_mode(num_out, filename_out);
+ int receive_input(int argc, char *argv[], int *num_out, char **filename_out) {
+    // Get available files first
+    char *files[MAX_FILES];
+    int file_count = get_wordlist_files(files, MAX_FILES);
+    if (file_count <= 0) {
+        fprintf(stderr, "No wordlists found in ./wordlists directory\n");
+        return -1;
     }
+
+    int file_index = -1;
+    int result;
     
-    return result;
+    // Try CLI first
+    if ((result = process_command_line(argc, argv, num_out, &file_index, files, file_count)) != 0) {
+        if (result < 0) {
+            cleanup_files_list(files, file_count);
+            return -1;
+        }
+    } 
+    // Fall back to interactive
+    else if ((result = process_interactive_mode(num_out, &file_index, files, file_count)) <= 0) {
+        cleanup_files_list(files, file_count);
+        return result;
+    }
+
+    // Validate selected index
+    if (file_index < 0 || file_index >= file_count) {
+        cleanup_files_list(files, file_count);
+        return -1;
+    }
+
+    // Build full path
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "./wordlists/%s", files[file_index]);
+    *filename_out = strdup(path);
+
+    // Cleanup
+    cleanup_files_list(files, file_count);
+    return 1;
+}
+
+/**
+ * @brief Helper to cleanup files list
+ * @param files Array of filenames
+ * @param count Number of files in array
+ */
+void cleanup_files_list(char *files[], int count) {
+    for (int i = 0; i < count; i++) {
+        free(files[i]);
+    }
 }
 
 /**
@@ -414,84 +461,124 @@ int receive_input(int argc, char *argv[], int *num_out, char **filename_out) {
  * @param argc Argument count
  * @param argv Argument vector
  * @param num_out Output for validated number
- * @param filename_out Output for filename (must be freed by caller)
+ * @param file_index_out Output for selected file index
+ * @param files Array of available filenames
+ * @param file_count Number of available files
  * @return 1 on success, 0 if insufficient args, -1 on error
  */
-int process_command_line(int argc, char *argv[], int *num_out, char **filename_out) {
-    if (argc < 3) return 0;  // Not enough args
-    
+int process_command_line(int argc, char *argv[], int *num_out, int *file_index_out, 
+                        char *files[], int file_count) {
+    if (argc < 3) return 0;
+
+    // Validate number
     int num = atoi(argv[1]);
     if (!is_valid_number(num)) {
-        fprintf(stderr, "Error: Number must be 128-256 and divisible by 32\n");
+        fprintf(stderr, "Invalid number. Must be 128-256 and divisible by 32\n");
         return -1;
     }
-    
     *num_out = num;
-    *filename_out = strdup(argv[2]);  // Caller must free
+
+    // Check if argument is numeric index
+    if (isdigit(argv[2][0])) {
+        int choice = atoi(argv[2]);
+        if (choice < 1 || choice > file_count) {
+            fprintf(stderr, "Invalid selection. Available options (1-%d):\n", file_count);
+            print_files_list(files, file_count);
+            return -1;
+        }
+        *file_index_out = choice - 1;
+    }
+    // Check if argument is filename
+    else {
+        bool found = false;
+        for (int i = 0; i < file_count; i++) {
+            if (strcmp(argv[2], files[i]) == 0) {
+                *file_index_out = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            fprintf(stderr, "Wordlist not found. Available options:\n");
+            print_files_list(files, file_count);
+            return -1;
+        }
+    }
+
     return 1;
 }
 
 /**
  * @brief Handles interactive user input
  * @param num_out Output for validated number
- * @param filename_out Output for selected filename (must be freed by caller)
+ * @param file_index_out Output for selected file index
+ * @param files Array of available filenames
+ * @param file_count Number of available files
  * @return 1 on success, -1 on error
- * @note Lists files from ./wordlists directory
  */
-int process_interactive_mode(int *num_out, char **filename_out) {
+int process_interactive_mode(int *num_out, int *file_index_out, 
+                            char *files[], int file_count) {
     // Get number
     printf("Enter number (128-256, divisible by 32): ");
-    scanf("%d", num_out);
-    if (!is_valid_number(*num_out)) {
-        fprintf(stderr, "Error: Invalid number\n");
+    if (scanf("%d", num_out) != 1 || !is_valid_number(*num_out)) {
+        fprintf(stderr, "Invalid number\n");
         return -1;
     }
 
-    // List files
-    DIR *dir = opendir("./wordlists");
-    if (!dir) {
-        fprintf(stderr, "Error: Couldn't open data directory\n");
+    // Display files
+    printf("\nAvailable wordlists:\n");
+    print_files_list(files, file_count);
+
+    // Get selection
+    printf("\nChoose wordlist (1-%d): ", file_count);
+    int choice;
+    if (scanf("%d", &choice) != 1 || choice < 1 || choice > file_count) {
+        fprintf(stderr, "Invalid selection\n");
         return -1;
     }
+    *file_index_out = choice - 1;
+
+    return 1;
+}
+
+/**
+ * @brief Prints the list of available files with 1-based numbering
+ * @param files Array of filenames
+ * @param count Number of files
+ */
+void print_files_list(char *files[], int count) {
+    for (int i = 0; i < count; i++) {
+        printf("%2d: %s\n", i+1, files[i]);
+    }
+}
+
+/**
+ * @brief Gets list of available wordlist files
+ * @param files Output array for filenames (must be freed by caller)
+ * @param max_files Maximum number of files to return
+ * @return Number of files found, or -1 on error
+ */
+int get_wordlist_files(char *files[], int max_files) {
+    DIR *dir = opendir("./wordlists");
+    if (!dir) return -1;
 
     struct dirent *entry;
-    char *files[MAX_FILES];
     int count = 0;
 
-    printf("\nAvailable files:\n");
-    while ((entry = readdir(dir)) && count < MAX_FILES) {
+    while ((entry = readdir(dir)) && count < max_files) {
         if (entry->d_type == DT_REG) {
             files[count] = strdup(entry->d_name);
-            printf("%2d: %s\n", count+1, files[count]);
+            if (!files[count]) {
+                // Cleanup on allocation failure
+                while (count-- > 0) free(files[count]);
+                closedir(dir);
+                return -1;
+            }
             count++;
         }
     }
     closedir(dir);
-
-    if (count == 0) {
-        fprintf(stderr, "Error: No files found\n");
-        return -1;
-    }
-
-    // Get selection
-    int choice;
-    printf("\nChoose file (1-%d): ", count);
-    scanf("%d", &choice);
-
-    if (choice < 1 || choice > count) {
-        fprintf(stderr, "Error: Invalid selection\n");
-        for (int i = 0; i < count; i++) free(files[i]);
-        return -1;
-    }
-
-    *filename_out = files[choice-1];
-    
-    // Free unselected files
-    for (int i = 0; i < count; i++) {
-        if (i != choice-1) free(files[i]);
-    }
-
-    return 1;
+    return count;
 }
 
 /**
