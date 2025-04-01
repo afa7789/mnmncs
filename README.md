@@ -88,5 +88,14 @@ law indicate clump inflict
 BIP-39 Seed (hex): 2e3b9a265e97bc70437ab23a80faa0ee6038bb0fb7a1fdd6592f0ebec3e421768cdfe1c99d480ceba699c7cd0432fe83a425671fc7c3a3c18386a075170eb740
 
                                              ♠♡♦♧ - don't trust, verify
-
 </pre>
+
+## BIP-32 getting pub and priv key
+
+After you get the private_key you can also run the `bip32.c` to get the private_key and WIF to be able to import in Electrum.
+
+- building it:
+`gcc -w bip32.c cpto/cpto.c -o bip32`
+
+- running: 
+`./bip32 2f00201a843bf367ed45fda52ea0d3aba21ee730ad1a93189e67ae0e6faae4bb3a32629b955d1cfcde3becc25f2e39519e1e5d9ee8318c6217b11bcedb9f9683`
