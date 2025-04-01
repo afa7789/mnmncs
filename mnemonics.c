@@ -28,7 +28,8 @@ void print_help();
 void print_entropy(unsigned char *buffer,size_t length);
 
 void generate_entropy(unsigned char *buffer, size_t length);
-void entropy_checksum_and_concat(unsigned char *buffer);
+void entropy_checksum_and_concat(unsigned char *buffer,size_t *length);
+void concat_arrays(unsigned char **dest, size_t *dest_size, unsigned char *src, size_t src_size);
 
 int is_valid_number(int num);
 int receive_input(int argc, char *argv[], int *num_out, char **filename_out);
@@ -90,6 +91,8 @@ void generate_entropy(unsigned char *buffer, size_t length) {
 
 /**
  * @brief Prints the characters in the entropy mainly for  
+ * @param buffer Output buffer to store entropy
+ * @param length Number of the buffer size to be able to print
  */
 void print_entropy(unsigned char *buffer, size_t length) {
     // Print entropy in hex (same on all platforms)
@@ -100,22 +103,57 @@ void print_entropy(unsigned char *buffer, size_t length) {
     printf("\n");
 }
 
-/** 
- * @brief Create the checksum for it and concat at the ending of the entropy 
+/**
+ * @brief Prints the characters in the hash mainly for 
+ * @param buffer Output buffer to store hash
  */
-void entropy_checksum_and_concat(unsigned char *buffer){
-    const char *message = "Hello, SHA-256!";
-    uint8_t hash[32];  // Buffer for the hash (32 bytes)
-
-    // Compute SHA-256
-    sha256((const uint8_t *)message, strlen(message), hash);
-
-    // Print the hash
-    printf("SHA-256 hash: ");
-    for (int i = 0; i < 32; i++) {
-        printf("%02x", hash[i]);  // Print as hexadecimal
+void print_hash(unsigned char *buffer) {
+    // Print hash in hex (same on all platforms)
+    printf("Hash (hex): ");
+    for (size_t i = 0; i < 32; i++) {
+        printf("%02x", buffer[i]);
     }
     printf("\n");
+}
+
+/**
+ * @brief Concatenate two array of bytes and also increase the parameter related to the length of original array.
+ * @param dest Initial array of the concat
+ * @param dest_size Size of the array dest
+ * @param src Src array, we want to concat
+ * @param src_size Size of the src array
+ */
+ void concat_arrays(unsigned char **dest, size_t *dest_size, unsigned char *src, size_t src_size) {
+    *dest = realloc(*dest, *dest_size + src_size); // Resize the array
+    if (*dest == NULL) {
+        perror("realloc failed");
+        exit(1);
+    }
+    memcpy(*dest + *dest_size, src, src_size); // Copy the source data
+    *dest_size += src_size; // Update the size
+}
+
+/** 
+ * @brief Create the checksum for it and concat at the ending of the entropy 
+ * @param buffer The buffer of the entropy
+ * @param length The size of the buffer
+ */
+void entropy_checksum_and_concat(unsigned char *buffer, size_t *length){
+    if (!buffer || !length || *length == 0) {
+        printf("Invalid parameters\n");
+        return;
+    }
+
+    // const char *message = "Hello, SHA-256!";
+    uint8_t hash[32];  // Buffer for the hash (32 bytes)
+    size_t length_o = *length; // Save the original length
+
+    // Compute SHA-256
+    sha256((const uint8_t *)buffer, length_o, hash);
+    // print_hash(hash);
+    // Calculate the number of bytes for lengt hwe will use on checksum  (length / 32)
+    // int checksum_length = *length / 32;
+    // concat_arrays(&buffer, length, hash, checksum_length); // Concatenate the hash to the buffer
     return;
 }
 
@@ -125,17 +163,18 @@ void entropy_checksum_and_concat(unsigned char *buffer){
  */
 void print_header() {
     printf("\n");
-    printf("  ██   ▒██░   ██░    ██▒   ██░   ▓█▓   ▒██   ▓██   ▓██░       ███      ░███░  ▓░\n");
-    printf("████████████████████████████████████████████████████████▓  ▒███████▓▒▓████████░ \n");
-    printf(" ░████ ░████  ████  ░████  ████  ▓███▒ ▒███░ ▒███▓  ████  ████░▓██ ░███▒ ▒███░\n");  
-    printf("  ███▓  ████  ████   ████  ████  ▒███  ░███░  ███▒  ▓███  ▓███  ▓░ ░███▒  ░█\n");    
-    printf("  ███▓  ████  ████   ████  ████  ▒███  ░███░  ███▒  ▓███  ▓███     ▓████ ▓███\n");   
-    printf("  ████  ████  ████   ███▓  ████  ▒███  ░███░  ███▓  ▓███  ▓███     ███████████▓ \n");
-    printf("  ███▓  ████  ████   ████  ████  ▓███  ░███░  ███▓  ▓███  ▒███       ░█▓  ▒███▒\n"); 
-    printf("  ███▓  ████  ████   ████  ████  ▒███  ░███░  ███▓  ▓███  ▒███       ▓▓   ▒███▒\n"); 
-    printf("  ███▓  ████  ████   ████  ████  ▓███  ▒███▓ ░███▓  ████  ▓████  ▒▓▓████▓ ▒███▓\n"); 
-    printf(" █████▒█████▓░███████████▓▒███████████▒▓██████████▓░████▓▒███████▓██████████▒\n");
-    printf("  ▓██░  ▒██▓   ▓██░  ░██▓   ██▓   ███   ▒██░  ▒██░   ▓██     ▓█▓░█░    ███     \n");
+    printf("                                                                              ░\n");
+    printf(" ░██░  ███   ██▒   ▓██░  ██▒  ░██▓  ▓██░  ██▓  ▓███ ░███      ░███     ▓███▒ ░▓\n");
+    printf("▓████████████████▓████████████████████████████████████████ ▒██████████████████ \n");
+    printf("  ███▒ ▒███  ████  ▒███  ███▒  ██░  ░███  ▓███  ████  ███░ ▒███ ▓█  ███▒  ▒█▒  \n");
+    printf("  ███░  ███  ████  ░███  ███▒  ███  ░███  ▒███  ████  ███░ ░███  ░  ███▓  ██   \n");
+    printf("  ███░  ███  ▓███  ░███  ███▒  ███  ░███  ▓███  ████  ███░ ░███    ▒██████████ \n");
+    printf("  ███▒ ░███  ▓███  ░███  ███▒  ██░  ░███  ▓███  ████  ███░ ░███      ███▒ ████ \n");
+    printf("  ███░ ░███  ████  ░███  ███▒  ███  ░███  ▓███  ████  ███░ ░███      ░█   ▓███ \n");
+    printf("  ███░ ░███  ████  ▒███  ███▒  ███  ▒███  ▓███  ████  ███░ ░███░  ▓░▓██▓  ▒███ \n");
+    printf(" █████ █████ ███████████░████▓▓████▒▓███████████████▓▒████░███████▓█████████▓  \n");
+    printf("  ███   ███   ███░  ███  ░██▓  ███▒  ▓██  ░███  ░███  ▒██░   ░███░█   ░███     \n");
+    printf("   ▒                       ░                                                    \n\n");
 }
 
 /**
@@ -300,7 +339,7 @@ int main(int argc, char *argv[]) {
         print_help();
     }
     
-    int num;
+    size_t num=0;
     char *filename = NULL;
     int result = receive_input(argc, argv, &num, &filename);
 
@@ -308,7 +347,7 @@ int main(int argc, char *argv[]) {
     unsigned char entropy[num]; // 256 bits (for 24-word mnemonic)
     generate_entropy(entropy, sizeof(entropy));
     print_entropy(entropy,num);
-    entropy_checksum_and_concat(entropy);
+    entropy_checksum_and_concat(entropy, &num);
 
     print_ending();
     return 0;
