@@ -99,3 +99,31 @@ After you get the private_key you can also run the `bip32.c` to get the private_
 
 - running: 
 `./bip32 2f00201a843bf367ed45fda52ea0d3aba21ee730ad1a93189e67ae0e6faae4bb3a32629b955d1cfcde3becc25f2e39519e1e5d9ee8318c6217b11bcedb9f9683`
+
+- output example:
+```
+➜  mnmncs git:(master) ✗ ./bip32 2f00201a843bf367ed45fda52ea0d3aba21ee730ad1a93189e67ae0e6faae4bb3a32629b955d1cfcde3becc25f2e39519e1e5d9ee8318c6217b11bcedb9f9683
+
+
+ BIP-32 creating pubkey and privkey to importInput BIP-39 Seed (hex):
+Seed: 2f00201a843bf367ed45fda52ea0d3aba21ee730ad1a93189e67ae0e6faae4bb3a32629b955d1cfcde3becc25f2e39519e1e5d9ee8318c6217b11bcedb9f9683
+
+BIP-32 Master Key Derivation Results:
+Master Private Key: 673cb61cbdeb67b8ecce8c44021defa992787c546569327b4328fe809de31ccb
+Master Chain Code: 6552afdf4bc3a927795fb55a2ac9a7374747be8023329937157a95cae49b200f
+
+Electrum using xpriv
+
+xprv: xprv9s21ZrQH143K34sBvFpfdXVRV7hj5YXScWB3oSQBZuh74XLM1eYMZybGPy9eggeB92J2Ts7QGK5Z189k9xoopp5j1tBAfH7CEhbbdP5CDUH
+
+To create a spending wallet, please enter a master private key (xprv/yprv/zprv).
+NewWallet -> standardWallet -> use a masterKey -> PASTER the Xpriv above.
+Electrum using WIF
+
+WIF: 5JbkdquZp2ddnnng1FAsdmRjZLiEdEtk3j6HwNL7iCaoZVrguzQ
+
+The WIF is a Single-Key Wallet. "Enter a list of Bitcoin addresses (this will create a watching-only wallet), or a list of private keys."
+New Wallet -> Import Bitcoin addresses or private keys -> paste it and click next -> setup password, done.
+
+                                      ₿☀🦄ᚠ - you can just build things
+```
