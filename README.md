@@ -38,7 +38,29 @@ In this binary (or code), we receive the number of bits as expected by the BIP-3
 - **Generate deterministic wallets**:
   - Use the resulting seed to generate deterministic wallets using BIP-0032 or similar methods.
 
-## Building:
+## Pre-requisite
+
+Install opensll
+On MacOS:
+
+```bash
+brew install openssl
+# either use exports
+export CPPFLAGS="-I$(brew --prefix openssl)/include"
+export LDFLAGS="-L$(brew --prefix openssl)/lib"
+# or create sys links to default locations where c looks for it's packages.
+sudo ln -s /opt/homebrew/opt/openssl/include/openssl /usr/local/include/openssl\n
+sudo ln -s /opt/homebrew/opt/openssl/lib/libssl.dylib /usr/local/lib/libssl.dylib\n
+sudo ln -s /opt/homebrew/opt/openssl/lib/libcrypto.dylib /usr/local/lib/libcrypto.dylib\n
+```
+
+On linux
+```
+sudo apt update
+sudo apt install libssl-dev
+```
+
+## Running it:
 
 On Windows: Requires linking with bcrypt.lib:
 
@@ -47,20 +69,21 @@ gcc program.c -lbcrypt -o program.exe  # MinGW
 cl program.c /link bcrypt.lib          # MSVC
 ```
 
-On Linux: 
-```
-gcc -o program program.c
-```
-
-## Running it:
+On Others: 
 
 ```
-gcc -w mnemonics.c cpto/cpto.c  -o out && ./out 256 1
+gcc -w mnemonics.c -lssl -lcrypto -o out && ./out 256 1
+```
+
+If you didn’t create symlinks and OpenSSL is in a non-standard location (like Homebrew’s install path), use:
+
+```bash
+gcc -w mnemonics.c -I$(brew --prefix openssl)/include -L$(brew --prefix openssl)/lib -lssl -lcrypto -o out && ./out 256 1
 ```
 
 ### Example Output
 <pre>
-➜  mnmncs git:(master) ✗ gcc -w mnemonics.c cpto/cpto.c  -o out && ./out 256 1
+➜  mnmncs git:(master) ✗ gcc -w mnemonics.c -lssl -lcrypto -o out && ./out 256 1
 
 Entropy (hex): c816cdaa0573e1bd3c459b257621f6a73847edc42637896d706d9b10d70ad9bfcbf87067a481c2796ed27e2800274370a0f92e2fa5196909770b40eae6897342f95b5941133f590e650a34e4d2705cadbe842e661b689cd9b5a1cd4d9e592224cb6bd71fabe3555ce00abddcddecb29e61134ff30fde2e7ae695c895a29c982fce3d67d5bc70a9eeeaffbdf10347444060918974ab65057193698346149e974d842d8f504e8ca6f060e0e8bb68b97e42980ec4375a1b7f5848f140f8b4d152e4c1845f9d0293a29432c62aa6be9d7eac3c3f4f2c5d779f3d75e460a903e775eaf7fb543d650befd8db1aa416f8ee9c06fb975e7f106a44c02b109a4162d0b657
 Hash (hex): 8f06c5922403b39b9549701db27d89f70c2797fc937086ec2abd6e85f8834304
@@ -84,13 +107,13 @@ BIP-39 Seed (hex): 2e3b9a265e97bc70437ab23a80faa0ee6038bb0fb7a1fdd6592f0ebec3e42
 After you get the private_key you can also run the `bip32.c` to get the private_key and WIF to be able to import in Electrum.
 
 - building it:
-`gcc -w bip32.c cpto/cpto.c -o bip32`
+`gcc -w bip32.c -lssl -lcrypto -o bip32`
 
 - running: 
 `./bip32 2f00201a843bf367ed45fda52ea0d3aba21ee730ad1a93189e67ae0e6faae4bb3a32629b955d1cfcde3becc25f2e39519e1e5d9ee8318c6217b11bcedb9f9683`
 
 - output example:
-```
+<pre>
 ➜  mnmncs git:(master) ✗ ./bip32 2f00201a843bf367ed45fda52ea0d3aba21ee730ad1a93189e67ae0e6faae4bb3a32629b955d1cfcde3becc25f2e39519e1e5d9ee8318c6217b11bcedb9f9683
 
 
@@ -148,4 +171,4 @@ bitcoin-cli importdescriptors '[{
 # But we are using `active: false` here to be able to import single key into wallet.
 
                                         ₿Ω∆† - you can just build things
-```
+</pre>

@@ -12,7 +12,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cpto/cpto.h"  // Include your header
+#include <openssl/sha.h>
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
 
 // Platform-specific headers and functions
 #ifdef _WIN32
@@ -168,7 +170,7 @@ void entropy_checksum_and_concat(unsigned char **buffer, size_t *length) {
     uint8_t hash[32];
     size_t length_o = *length;
 
-    sha256((const uint8_t *)*buffer, length_o, hash);
+    SHA256((const uint8_t *)*buffer, length_o, hash);
     print_hash(hash);
     printf("With CS concat ");
 
@@ -363,11 +365,13 @@ void derive_seed_from_mnemonic(const char **mnemonic, size_t word_count,
         strcat(salt, passphrase);
     }
 
-    // 3. Run PBKDF2
-    pbkdf2_hmac_sha512((uint8_t *)mnemonic_str, strlen(mnemonic_str),
-                       (uint8_t *)salt, strlen(salt),
-                       2048,  // Standard BIP39 iteration count
-                       seed, 64);
+    // 3. Run PBKDF2 using OpenSSL
+    PKCS5_PBKDF2_HMAC(mnemonic_str, strlen(mnemonic_str),
+                      (const unsigned char *)salt, strlen(salt),
+                      2048,  // Standard BIP39 iteration count
+                      EVP_sha512(),
+                      64,    // Output length (64 bytes for BIP-39)
+                      seed);
 }
 
 // ============ PRINTERS ============

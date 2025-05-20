@@ -13,7 +13,10 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "cpto/cpto.h"  /* Custom crypto header */
+
+ #include <openssl/hmac.h>
+ #include <openssl/sha.h>
+ #include <openssl/evp.h>
 
 /** @brief Type definition for byte to improve readability */
 typedef unsigned char byte;
@@ -181,11 +184,14 @@ static int derive_bip32_master_key(
     byte master_key[SHA512_DIGEST_SIZE];
     
     /* HMAC-SHA512 with key "Bitcoin seed" and message as the seed */
-    hmac_sha512(
-        (const uint8_t *)BIP32_KEY, strlen(BIP32_KEY),
-        seed, seed_len,
-        master_key
-    );
+    unsigned int md_len = SHA512_DIGEST_SIZE;
+    if (HMAC(EVP_sha512(), 
+        BIP32_KEY, strlen(BIP32_KEY),
+            seed, seed_len,
+            master_key, &md_len) == NULL) {
+        fprintf(stderr, "HMAC-SHA512 failed\n");
+        return ERROR_INTERNAL;
+    }
     
     /* First 32 bytes are the master private key */
     memcpy(private_key_out, master_key, PRIVATE_KEY_LENGTH);
@@ -216,8 +222,8 @@ static int private_key_to_wif(const byte *private_key, byte *wif_key) {
     memcpy(versioned_key + 1, private_key, PRIVATE_KEY_LENGTH);
 
     /* Double SHA-256 checksum */
-    sha256(versioned_key, PRIVATE_KEY_LENGTH + 1, checksum);
-    sha256(checksum, 32, checksum);
+    SHA256(versioned_key, PRIVATE_KEY_LENGTH + 1, checksum);
+    SHA256(checksum, 32, checksum);
 
     /* Append first 4 bytes of checksum */
     memcpy(versioned_key + PRIVATE_KEY_LENGTH + 1, checksum, 4);
@@ -269,8 +275,8 @@ static int generate_xprv(const byte *private_key, const byte *chain_code, byte *
 
     /* Calculate checksum (first 4 bytes of double SHA-256) */
     byte checksum[32];
-    sha256(xprv_raw, 78, checksum);
-    sha256(checksum, 32, checksum);
+    SHA256(xprv_raw, 78, checksum);
+    SHA256(checksum, 32, checksum);
     
     memcpy(xprv_raw + 78, checksum, 4);
 
@@ -357,7 +363,7 @@ static int print_xprv_and_wif(const byte *private_key, const byte *chain_code) {
  */
 void print_ending() {
     printf("\n");
-    printf("%80s", "₿Ω∆† - you can just build things\n");
+    printf("\n%80s", "₿Ω∆† - you can just build things\n");
     printf("\n");
 }
 
